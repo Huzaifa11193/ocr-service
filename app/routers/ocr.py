@@ -1,17 +1,19 @@
 import io
+import zipfile
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from PIL import Image, UnidentifiedImageError
 from starlette.concurrency import run_in_threadpool
 
 from ..auth import verify_token
 from ..config import settings
-from ..ocr.pdf import PdfError, analyze_pdf
+from ..ocr.pdf import PdfError, analyze_pdf, pdf_to_images
 from ..ocr.postprocess import postprocess_text
 from ..ocr.preprocess import preprocess_image
 from ..ocr.tesseract_engine import ocr_image
 from ..ocr.vision_engine import vision_ocr
-from ..schemas import OcrResponse, PageResult, SinglePageOcrResponse
+from ..schemas import OcrResponse, PageResult, SinglePageOcrRequest, SinglePageOcrResponse
 
 router = APIRouter(dependencies=[Depends(verify_token)])
 
@@ -143,19 +145,54 @@ async def ocr(
     return OcrResponse(pages=pages, engine=engine)
 
 
+@router.post("/ocr/render")
+async def render(
+    file: UploadFile = File(...),
+    dpi: int = Form(0),
+):
+    """Render a PDF (or normalise an image) to a ZIP of 300 DPI PNG pages.
+
+    The Laravel job stores these files as ``pages/page_{n}.png`` so the viewer
+    and the vision-enhancement job have a stable image per page.
+    """
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    render_dpi = dpi if 0 < dpi <= 600 else settings.ocr_dpi
+    filename = file.filename or ""
+    content_type = file.content_type or ""
+
+    if _is_pdf(content, content_type, filename):
+        try:
+            images = await run_in_threadpool(pdf_to_images, content, render_dpi)
+        except PdfError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    else:
+        images = [_load_image(content)]
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for index, image in enumerate(images, start=1):
+            page = io.BytesIO()
+            image.save(page, format="PNG", optimize=True)
+            archive.writestr(f"page_{index}.png", page.getvalue())
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="pages.zip"'},
+    )
+
+
 @router.post("/ocr/page", response_model=SinglePageOcrResponse)
 async def ocr_page(
+    options: Annotated[SinglePageOcrRequest, Form()],
     file: UploadFile = File(...),
-    engine: str = Form("tesseract"),
-    lang: str = Form(""),
-    preprocess: str = Form("1"),
-    handwriting: str = Form("0"),
 ):
     """OCR a single page image, used for per-page vision enhancement."""
-    engine = _validate_engine(engine)
-    language = (lang or settings.tesseract_lang).strip()
-    use_preprocess = _as_bool(preprocess)
-    handwriting_mode = _as_bool(handwriting, default=False)
+    engine = _validate_engine(options.engine)
+    language = (options.lang or settings.tesseract_lang).strip()
 
     content = await file.read()
     if not content:
@@ -169,7 +206,7 @@ async def ocr_page(
 
     image = _load_image(content)
     text, confidence = await _transcribe_image(
-        image, engine, language, use_preprocess, handwriting_mode
+        image, engine, language, options.preprocess, options.handwriting
     )
 
     return SinglePageOcrResponse(

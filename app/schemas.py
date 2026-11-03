@@ -25,6 +25,15 @@ class OcrResponse(BaseModel):
     engine: str
 
 
+class SinglePageOcrRequest(BaseModel):
+    """Form options for POST /ocr/page (sent alongside the image file)."""
+
+    engine: OcrEngine = "tesseract"
+    lang: str = ""
+    preprocess: bool = True
+    handwriting: bool = False
+
+
 class SinglePageOcrResponse(BaseModel):
     """Result for POST /ocr/page."""
 
