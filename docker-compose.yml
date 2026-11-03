@@ -1,0 +1,17 @@
+services:
+  ocr-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../scribe/docker/env/local.env
+    environment:
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-change-me-long-random}
+    ports:
+      - "8005:8001"          # host 8005 → container 8001
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5

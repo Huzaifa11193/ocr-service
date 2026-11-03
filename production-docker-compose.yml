@@ -1,0 +1,21 @@
+version: '3.9'
+
+# Production compose – service runs internally, no host‑port exposure.
+# Use: docker compose -f production-docker-compose.yml up -d
+services:
+  ocr-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../docker/env/production.env
+    environment:
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-change-me-long-random}
+    expose:
+      - "8001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
