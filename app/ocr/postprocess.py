@@ -1,53 +1,47 @@
-import unicodedata
 import re
-from typing import Iterable
+import unicodedata
 
-# Mapping of Arabic characters to their Urdu equivalents
+# Arabic characters that have a distinct Urdu form. Applied per character so
+# mixed Arabic/Urdu OCR output converges on the Urdu spelling used for search.
 CHAR_MAP = {
-    "ي": "ی",
-    "ك": "ک",
-    "ى": "ی",
-    "ة": "ہ",
-    "دِ": "د",
-    "بِ": "ب",
-    # Add more mappings as needed
+    "ي": "ی",  # Arabic yeh -> Urdu yeh
+    "ى": "ی",  # Arabic alef maksura -> Urdu yeh
+    "ك": "ک",  # Arabic kaf -> Urdu kaf
+    "ة": "ہ",  # Arabic teh marbuta -> Urdu heh (common word-final form)
 }
 
+_HORIZONTAL_WHITESPACE = re.compile(r"[^\S\n]+")
+_EXCESS_NEWLINES = re.compile(r"\n{3,}")
+
+
 def _apply_char_map(text: str) -> str:
-    """Replace Arabic characters with Urdu equivalents based on ``CHAR_MAP``.
-    The mapping is applied character‑by‑character to keep the function fast.
-    """
-    return "".join(CHAR_MAP.get(ch, ch) for ch in text)
+    """Replace Arabic character variants with their Urdu equivalents."""
+    return "".join(CHAR_MAP.get(char, char) for char in text)
+
 
 def _remove_zwnj(text: str) -> str:
-    """Zero‑width non‑joiner (U+200C) is removed because it interferes with search.
-    """
+    """Remove zero-width non-joiners (U+200C) which break search terms."""
     return text.replace("\u200c", "")
 
+
 def _normalize_whitespace(text: str) -> str:
-    """Collapse multiple spaces/tabs/newlines into a single space and strip.
-    ``re`` is used for speed and readability.
-    """
-    # Replace any whitespace sequence (including newlines) with a single space
-    text = re.sub(r"\s+", " ", text)
+    """Collapse redundant spaces while keeping paragraph breaks intact."""
+    text = _HORIZONTAL_WHITESPACE.sub(" ", text)
+    text = "\n".join(line.strip() for line in text.split("\n"))
+    text = _EXCESS_NEWLINES.sub("\n\n", text)
     return text.strip()
 
+
 def postprocess_text(text: str) -> str:
-    """Perform all post‑processing steps required by the ``arc`` spec.
+    """Normalize OCR text for storage, search and embedding.
 
-    1. Unicode NFC normalization – ensures a canonical representation.
-    2. Arabic→Urdu character mapping.
-    3. Remove zero‑width non‑joiner characters.
-    4. Collapse whitespace.
-
-    The function returns a clean string ready for storage, indexing and embedding.
+    1. Unicode NFC normalization - canonical representation.
+    2. Arabic -> Urdu character mapping.
+    3. Zero-width non-joiner removal.
+    4. Redundant whitespace cleanup (line breaks are preserved).
     """
-    # Step 1 – canonical composition
-    text = unicodedata.normalize("NFC", text)
-    # Step 2 – character mapping
+    text = unicodedata.normalize("NFC", text or "")
     text = _apply_char_map(text)
-    # Step 3 – ZWNJ removal
     text = _remove_zwnj(text)
-    # Step 4 – whitespace cleanup
     text = _normalize_whitespace(text)
     return text
