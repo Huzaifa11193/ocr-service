@@ -10,8 +10,18 @@ services:
       SERVICE_TOKEN: ${SERVICE_TOKEN:-change-me-long-random}
     ports:
       - "8005:8001"          # host 8005 → container 8001
+    # Join the main stack's network so OLLAMA_URL=http://ollama:11434 (from
+    # local.env) resolves and vision OCR works here too. Start the main stack
+    # first: scripts run this service alongside scribe/local-docker.yml.
+    networks:
+      - docintel
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
       timeout: 5s
       retries: 5
+
+networks:
+  docintel:
+    external: true
+    name: docintel-local_default

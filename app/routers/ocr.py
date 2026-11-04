@@ -1,7 +1,5 @@
 import io
 import zipfile
-from typing import Annotated
-
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from PIL import Image, UnidentifiedImageError
 from starlette.concurrency import run_in_threadpool
@@ -187,11 +185,25 @@ async def render(
 
 @router.post("/ocr/page", response_model=SinglePageOcrResponse)
 async def ocr_page(
-    options: Annotated[SinglePageOcrRequest, Form()],
     file: UploadFile = File(...),
+    engine: str = Form("tesseract"),
+    lang: str = Form(""),
+    preprocess: str | None = Form(None),
+    handwriting: str | None = Form(None),
 ):
-    """OCR a single page image, used for per-page vision enhancement."""
-    engine = _validate_engine(options.engine)
+    """OCR a single page image, used for per-page vision enhancement.
+
+    Fields are declared individually rather than as a ``Form()`` model: with
+    FastAPI 0.115 the model form is not flattened, so the service expected a
+    single ``options`` field and every real (multipart) call failed with 422.
+    """
+    engine = _validate_engine(engine)
+    options = SinglePageOcrRequest(
+        engine=engine,
+        lang=lang,
+        preprocess=_as_bool(preprocess, default=True),
+        handwriting=_as_bool(handwriting, default=False),
+    )
     language = (options.lang or settings.tesseract_lang).strip()
 
     content = await file.read()

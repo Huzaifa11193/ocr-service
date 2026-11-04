@@ -34,14 +34,16 @@ def test_ocr_rejects_wrong_token():
 
 
 def test_ocr_page_accepts_valid_token():
-    # Auth passes before payload validation, so 415/422 proves the token worked.
+    # Auth passes before payload validation, so 415 proves the token worked.
+    # Asserting exactly 415 (not "415 or 422") matters: 422 is what a rejected
+    # form contract returns, and accepting it here once hid a broken endpoint.
     response = client.post(
         "/ocr/page",
-        data={"engine": "tesseract"},
+        data={"engine": "tesseract", "preprocess": "1"},
         files={"file": ("a.png", b"not-an-image", "image/png")},
         headers=VALID_HEADERS,
     )
-    assert response.status_code in (415, 422)
+    assert response.status_code == 415
 
 
 def test_verify_token_direct():
