@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     ocr_dpi: int = 300
     ocr_workers: int = 2
     confidence_threshold: int = 60
+    # Audio transcription (POST /transcribe); tiny|base|small, int8 on CPU.
+    whisper_model: str = "base"
+    whisper_compute_type: str = "int8"
+    max_audio_mb: int = 25
 
     class Config:
         env_file = ".env"

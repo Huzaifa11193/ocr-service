@@ -4,9 +4,11 @@ from datetime import datetime, timezone
 import pytesseract
 from fastapi import APIRouter
 
+from ..ocr import whisper_engine
+
 router = APIRouter()
 
-SERVICE_VERSION = "0.2.0"
+SERVICE_VERSION = "0.3.0"
 REQUIRED_LANGUAGES = ("urd", "eng")
 
 _STARTED_AT = time.monotonic()
@@ -42,6 +44,10 @@ def health():
             "version": tesseract_version,
             "languages": languages,
             "missing_languages": missing_languages,
+        },
+        "whisper": {
+            "model": whisper_engine.model_name(),
+            "loaded": whisper_engine.is_loaded(),
         },
         "error": error,
     }
