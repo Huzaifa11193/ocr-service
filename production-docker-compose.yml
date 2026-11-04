@@ -9,7 +9,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file:
-      - ../docker/env/production.env
+      - ../scribe/docker/env/production.env
     environment:
       SERVICE_TOKEN: ${SERVICE_TOKEN:-change-me-long-random}
     expose:
